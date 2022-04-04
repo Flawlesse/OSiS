@@ -1,0 +1,15 @@
+#!/bin/bash
+
+inputFile='input.csv'
+tableName=$(sed '1q;d' $inputFile)
+echo $tableName
+tableColumns=$(sed '2q;d' $inputFile)
+echo $tableColumns
+
+outputFile="output.sql"
+>$outputFile
+sed '1,2d' $inputFile | while read line
+do
+   echo "INSERT INTO $tableName(${tableColumns[*]}) VALUES($line);" >> $outputFile
+done
+
