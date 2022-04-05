@@ -7,4 +7,4 @@ clear:
 fill:
 	python3 testdata.py fill in.txt
 test:
-	python3 testdata.py test out.txt
+	python3 testdata.py test output.txt

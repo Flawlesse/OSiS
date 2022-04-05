@@ -3,6 +3,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -11,56 +14,64 @@ const int MAX_LEN = 1000000;
 const char *INFILEN = "input.txt";
 const char *OUTFILEN = "output.txt";
 
-int *merge_sort(int *up, int *down, unsigned int left, unsigned int right)
+void synchro_merge(int *array, int l, int mid, int r)
 {
-    if (left == right)
+    int k = 0, i = l, j = mid + 1;
+    int l_n = mid, r_n = r;
+    int *subarray = (int *)malloc((r - l + 1) * sizeof(int));
+
+    while (i <= l_n && j <= r_n)
     {
-        down[left] = up[left];
-        return down;
-    }
-
-    unsigned int middle = left + (right - left) / 2;
-
-    // разделяй и сортируй
-    int *l_buff = merge_sort(up, down, left, middle);
-    int *r_buff = merge_sort(up, down, middle + 1, right);
-
-    // слияние двух отсортированных половин
-    int *target = l_buff == up ? down : up;
-
-    unsigned int l_cur = left, r_cur = middle + 1;
-    for (unsigned int i = left; i <= right; i++)
-    {
-        if (l_cur <= middle && r_cur <= right)
+        if (array[i] < array[j])
         {
-            if (l_buff[l_cur] < r_buff[r_cur])
-            {
-                target[i] = l_buff[l_cur];
-                l_cur++;
-            }
-            else
-            {
-                target[i] = r_buff[r_cur];
-                r_cur++;
-            }
-        }
-        else if (l_cur <= middle)
-        {
-            target[i] = l_buff[l_cur];
-            l_cur++;
+            subarray[k++] = array[i++];
         }
         else
         {
-            target[i] = r_buff[r_cur];
-            r_cur++;
+            subarray[k++] = array[j++];
         }
     }
-    return target;
+    // then appending ends to the array
+    for (; i <= l_n; ++i) {
+        subarray[k++] = array[i];
+    }
+    for (; j <= r_n; ++j){
+        subarray[k++] = array[j];
+    }
+
+    printf("Array[%d : %d]:\n", l, r + 1);
+    for (i = l, k = 0; i <= r, k <= r - l; ++i, ++k) {
+        array[i] = subarray[k];
+        printf("%d, ", array[i]);
+    }
+    printf("\n");
+
+    free(subarray);
+}
+
+void synchronous_sort(int *array, int l, int r)
+{
+    if (l < r)
+    {
+        int mid = (l + r) / 2;
+        synchronous_sort(array, l, mid);
+        synchronous_sort(array, mid + 1, r);
+        synchro_merge(array, l, mid, r);
+    }
+}
+
+void *parallel_sort(void *args)
+{
 }
 
 int main(int argc, int *argv[])
 {
     int inp_fh, out_fh;
+    if (argc > 4)
+    {
+        perror("Too much command line args given.");
+        exit(4);
+    }
     if (argc >= 2)
     {
         int nt = atoi((char *)argv[1]);
@@ -89,6 +100,22 @@ int main(int argc, int *argv[])
                 exit(2);
             }
         }
+        if (argc == 4)
+        {
+            if ((out_fh = open((char *)argv[3], O_WRONLY | O_CREAT | O_TRUNC, 0777)) == -1)
+            {
+                fprintf(stderr, "Error opening file %s.\n", argv[3]);
+                exit(3);
+            }
+        }
+        else
+        {
+            if ((out_fh = open(OUTFILEN, O_WRONLY | O_CREAT | O_TRUNC, 0777)) == -1)
+            {
+                fprintf(stderr, "Error opening file %s.\n", OUTFILEN);
+                exit(3);
+            }
+        }
     }
 
     // get data from file
@@ -107,12 +134,17 @@ int main(int argc, int *argv[])
         if (len == MAX_LEN)
             break;
     }
-
-    for (int i = 0; i < len; ++i)
-    {
-        printf("%d, ", array[i]);
-    }
     printf("\nLength is: %d\n", len);
+
+    synchronous_sort(array, 0, len - 1);
+    char buf[10];
+    for (int i = 0; i < len - 1; ++i)
+    {
+        sprintf(buf, "%d, ", array[i]);
+        write(out_fh, buf, strlen(buf));
+    }
+    sprintf(buf, "%d", array[len - 1]);
+    write(out_fh, buf, strlen(buf));
 
     free(buffer);
     free(array);
