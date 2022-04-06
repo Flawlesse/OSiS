@@ -294,7 +294,6 @@ int main(int argc, int *argv[])
     write_results(out_fh_sync, array_sync, len);
 
     // Parallel sorting
-    struct args_t *args = (struct args_t *)malloc(sizeof(struct args_t));
     start = clock();
     parallel_sort(array_paral, len);
     end = clock();
