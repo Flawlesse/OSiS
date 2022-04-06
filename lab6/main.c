@@ -134,7 +134,7 @@ void parallel_sort(int *array, int n)
     for (curr_size = 1; curr_size <= n - 1; curr_size = 2 * curr_size)
     {
         curr_nthreads = 0;
-        int DO_PARAL = n / curr_size * 8 <= NUM_THREADS;
+        int DO_PARAL = n / curr_size * 4 <= NUM_THREADS;
         // printf("Worth paralleling? : %s\n", DO_PARAL?"yes":"no");
         for (left_start = 0; left_start < n - 1; left_start += 2 * curr_size)
         {

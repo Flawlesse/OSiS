@@ -1,5 +1,5 @@
 build:
-	gcc -g -pthread main.c -o lab6
+	gcc -O3 -g -pthread main.c -o lab6
 run:
 	./lab6 16 in.txt
 clear:
