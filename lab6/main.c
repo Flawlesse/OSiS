@@ -12,14 +12,13 @@
 #include <sys/stat.h>
 
 int NUM_THREADS = 2;
-const int MAX_LEN = 1000000;
+const int MAX_LEN = 100000000;
 const char *INFILEN = "input.txt";
 const char *OUTFILEN_S = "output_sync.txt";
 const char *OUTFILEN_P = "output_paral.txt";
 const int MAX_THREADS = 256;
 int thread_ind = 0;
 
-// sem_t semaphore;
 struct args_t
 {
     int *array;
@@ -48,24 +47,16 @@ void merge_synchro(int *array, int l, int m, int r)
         perror("Allocation failed");
         exit(50);
     }
-    // printf("Got to here <merge_synchro>.\n");
 
     // Copy data to temp arrays L[] and R[]
     for (i = 0; i < n1; i++)
     {
-        // printf("array[%d] ", l + i);
         L[i] = array[l + i];
-        // printf("L[%d]=%d\n", i, L[i]);
     }
-    // printf("First copy passed.\n");
     for (j = 0; j < n2; j++)
     {
-        // printf("array[%d] ", m + 1 + j);
         R[j] = array[m + 1 + j];
-        // printf("R[%d]=%d\n", j, R[i]);
     }
-    // printf("After copy <merge_synchro>.\n");
-    // sleep(10);
 
     // Merge the temp arrays back into array[l..r]
     i = 0;
@@ -106,7 +97,6 @@ void synchronous_sort(int *array, int n)
         {
             int mid = min(left_start + curr_size - 1, n - 1);
             int right_end = min(left_start + 2 * curr_size - 1, n - 1);
-            // printf("Got to here <synchronoush_sort>.\n");
             merge_synchro(array, left_start, mid, right_end);
         }
     }
@@ -119,9 +109,7 @@ void *merge_parallel(void *args)
     int mid = ((struct args_t *)args)->m;
     int right_end = ((struct args_t *)args)->r;
 
-    // sem_wait(&semaphore);
     merge_synchro(array, left_start, mid, right_end);
-    // sem_post(&semaphore);
 }
 
 void parallel_sort(int *array, int n)
@@ -130,13 +118,13 @@ void parallel_sort(int *array, int n)
     int left_start;
     int curr_nthreads;
 
-    pthread_t *threads = (pthread_t *)malloc(NUM_THREADS * sizeof(pthread_t)); //(pthread_t *)malloc((n / 2 + 1) * sizeof(pthread_t));
+    pthread_t *threads = (pthread_t *)malloc(NUM_THREADS * sizeof(pthread_t));
     if (threads == NULL)
     {
         perror("Cannot allocate memory for threads.\n");
         exit(123);
     }
-    struct args_t *args = (struct args_t *)malloc(NUM_THREADS * sizeof(struct args_t)); //(struct args_t *)malloc((n / 2 + 1) * sizeof(struct args_t));
+    struct args_t *args = (struct args_t *)malloc(NUM_THREADS * sizeof(struct args_t));
     if (args == NULL)
     {
         perror("Cannot allocate memory for args.\n");
@@ -146,27 +134,35 @@ void parallel_sort(int *array, int n)
     for (curr_size = 1; curr_size <= n - 1; curr_size = 2 * curr_size)
     {
         curr_nthreads = 0;
+        int DO_PARAL = n / curr_size * 8 <= NUM_THREADS;
+        // printf("Worth paralleling? : %s\n", DO_PARAL?"yes":"no");
         for (left_start = 0; left_start < n - 1; left_start += 2 * curr_size)
         {
             int mid = min(left_start + curr_size - 1, n - 1);
             int right_end = min(left_start + 2 * curr_size - 1, n - 1);
 
-            args[curr_nthreads].array = array;
-            args[curr_nthreads].l = left_start;
-            args[curr_nthreads].m = mid;
-            args[curr_nthreads].r = right_end;
+            if (DO_PARAL)
+            {
+                args[curr_nthreads] = (struct args_t){.array = array, .l = left_start, .m = mid, .r = right_end};
+                pthread_create(&threads[curr_nthreads], NULL, &merge_parallel, &args[curr_nthreads]);
+                curr_nthreads++;
 
-            pthread_create(&threads[curr_nthreads], NULL, &merge_parallel, &args[curr_nthreads]);
-            curr_nthreads++;
-
-            if (curr_nthreads == NUM_THREADS) {
-                for (int i = 0; i < curr_nthreads; ++i){
-                    pthread_join(threads[i], NULL);
+                if (curr_nthreads == NUM_THREADS)
+                {
+                    for (int i = 0; i < curr_nthreads; ++i)
+                    {
+                        pthread_join(threads[i], NULL);
+                    }
+                    curr_nthreads = 0;
                 }
-                curr_nthreads = 0;
+            }
+            else
+            {
+                merge_synchro(array, left_start, mid, right_end);
             }
         }
         // We need to ALWAYS join at the end.
+        // curr_nthreads will be 0 if DO_PARAL is False
         for (int i = 0; i < curr_nthreads; ++i)
         {
             pthread_join(threads[i], NULL);
@@ -298,7 +294,6 @@ int main(int argc, int *argv[])
     write_results(out_fh_sync, array_sync, len);
 
     // Parallel sorting
-    // sem_init(&semaphore, 0, NUM_THREADS);
     struct args_t *args = (struct args_t *)malloc(sizeof(struct args_t));
     start = clock();
     parallel_sort(array_paral, len);
@@ -307,7 +302,6 @@ int main(int argc, int *argv[])
     printf(
         "Time elapsed for parallel sorting (given %d threads): %d ms.\n",
         NUM_THREADS, (int)cpu_time_used);
-    // sem_destroy(&semaphore);
     write_results(out_fh_paral, array_paral, len);
 
     free(buffer);

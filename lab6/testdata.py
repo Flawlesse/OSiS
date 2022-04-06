@@ -10,14 +10,12 @@ def test(filename="output.txt"):
     with open(filename, "r") as fh:
         my_data = [ int(i) for i in fh.readline().split(",")]
     test_data = sorted(my_data)
-    # with open(filename, "w+") as fh2:
-    #     fh2.write(", ".join([str(d) for d in test_data]))
     return test_data == my_data
 
 
 def fill_random(filename="input.txt"):
     with open(filename, "w+") as fh:
-        data = [random.randint(-10000, 10000) for _ in range(1000000)]
+        data = [random.randint(-10000, 10000) for _ in range(1_000_000)]
         fh.write(", ".join([str(d) for d in data]))
 
 
