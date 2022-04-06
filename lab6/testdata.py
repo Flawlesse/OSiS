@@ -17,7 +17,7 @@ def test(filename="output.txt"):
 
 def fill_random(filename="input.txt"):
     with open(filename, "w+") as fh:
-        data = [random.randint(-10000, 10000) for _ in range(1000)]
+        data = [random.randint(-10000, 10000) for _ in range(1000000)]
         fh.write(", ".join([str(d) for d in data]))
 
 

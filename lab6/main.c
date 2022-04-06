@@ -27,8 +27,6 @@ struct args_t
     int *array;
     int l;
     int r;
-    int rec_level;
-    int in_paral;
 };
 struct args_t **info_handles = NULL;
 
@@ -89,18 +87,7 @@ void synchronous_sort(int *array, int l, int r)
 void *parallel_sort(void *args)
 {
     struct args_t _args = *(struct args_t *)args;
-    printf("Args: %p, %d, %d; REC_LEVEL: %d", _args.array, _args.l, _args.r, _args.rec_level);
     struct args_t *left_args = NULL, *right_args = NULL;
-    int CAN_PARAL = pow(2.0, (double)(_args.rec_level + 1)) >= NUM_THREADS && pow(2.0, (double)_args.rec_level) < NUM_THREADS;
-
-    if (CAN_PARAL)
-    {
-        printf("On recursion level %d we make it parallel.\n", _args.rec_level);
-    }
-    if (_args.in_paral)
-    {
-        sem_wait(&semaphore);
-    }
 
     if (_args.l < _args.r)
     {
@@ -114,8 +101,6 @@ void *parallel_sort(void *args)
         left_args->array = _args.array;
         left_args->l = _args.l;
         left_args->r = mid;
-        left_args->rec_level = _args.rec_level + 1;
-        left_args->in_paral = CAN_PARAL;
 
         if ((right_args = (struct args_t *)malloc(sizeof(struct args_t))) == NULL)
         {
@@ -125,32 +110,27 @@ void *parallel_sort(void *args)
         right_args->array = _args.array;
         right_args->l = mid + 1;
         right_args->r = _args.r;
-        right_args->rec_level = _args.rec_level + 1;
-        right_args->in_paral = CAN_PARAL;
 
-        if (CAN_PARAL)
+        if (sem_trywait(&semaphore) == 0)
         {
             // two inner threads, they are controlled by semaphore from inside!!!
+            // printf("Gotcha!\n");
             pthread_t th[2];
             pthread_create(&th[0], NULL, &parallel_sort, left_args);
             pthread_create(&th[1], NULL, &parallel_sort, right_args);
             pthread_join(th[0], NULL);
             pthread_join(th[1], NULL);
+            merge(_args.array, _args.l, mid, _args.r);
+            sem_post(&semaphore);
         }
         else
         {
             parallel_sort(left_args);
             parallel_sort(right_args);
+            merge(_args.array, _args.l, mid, _args.r);
         }
-        merge(_args.array, _args.l, mid, _args.r);
-
-        if (_args.in_paral)
-        {
-            sem_post(&semaphore);
-        }
-        free(left_args);
-        free(right_args);
     }
+    free(args);
 }
 
 void write_results(int fd, int *array, int len)
@@ -278,8 +258,8 @@ int main(int argc, int *argv[])
     start = clock();
     synchronous_sort(array_sync, 0, len - 1);
     end = clock();
-    cpu_time_used = ((double)(end - start)) / (CLOCKS_PER_SEC / 1000000);
-    printf("Time elapsed for synchronous sorting: %.4f mcs.\n", cpu_time_used);
+    cpu_time_used = ((double)(end - start)) / (CLOCKS_PER_SEC / 1000);
+    printf("Time elapsed for synchronous sorting: %d mcs.\n", (int)cpu_time_used);
     write_results(out_fh_sync, array_sync, len);
 
     // Parallel sorting
@@ -288,10 +268,11 @@ int main(int argc, int *argv[])
     args->array = array_paral;
     args->l = 0;
     args->r = len - 1;
-    args->rec_level = 0;
-    args->in_paral = 0;
+    start = clock();
     parallel_sort(args);
-    free(args);
+    end = clock();
+    cpu_time_used = ((double)(end - start)) / (CLOCKS_PER_SEC / 1000);
+    printf("Time elapsed for parallel sorting: %d ms.\n", (int)cpu_time_used);
     sem_destroy(&semaphore);
     write_results(out_fh_paral, array_paral, len);
 
